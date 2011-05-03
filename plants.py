@@ -5,7 +5,10 @@ class Market:
         self.plants = plants
         self.dIntercept = dIntercept
         self.dElasticity = dElasticity
-        self.runMarket(fixedPrice)
+        self.carbonProduced = 0
+        if fixedPrice:
+            self.runMarket(fixedPrice)
+
 
     def getDemand(self):
         """getDemand gradually increases price until the market clears. It stores the total quantity demanded for the market"""
@@ -60,8 +63,10 @@ class Market:
         	while sum < self.qdemand and i<len(self.plants): #keep going until we've met demand, or until we hit the end of the plant list
         		p = self.plants[i] #get the current plant
         		sum += p.capacity #add its capacity
+        		self.carbonProduced += p.capacity * p.carbon
         		clearCost = p.bid #update the clearing price to reflect this plant's bid
         		i+=1
+        		#print "running plant %s for %s capacity at %s bid, total %s capacity" % (p.name, p.capacity, p.bid, sum)
     	self.residualDemand = sum - self.qdemand	
     	self.clearPrice = clearCost
     	if sum > self.qdemand:
@@ -72,6 +77,7 @@ class Market:
     	        i+=1
     	else: #There's no extra capacity in this market; price can rise fairly freely.
     	    self.excessCapacity = 0
+        self.carbonProduced -= self.excessCapacity * p.carbon
 
     def findPlantByPrice(self, price):
         i = 0
@@ -82,7 +88,8 @@ class Market:
             	
 class Plant:
 	""" A model of an ESG plant """
-	def __init__(self, name, location, capacity, heatRate, fuelPrice, fuelCost, vOM, carbon, dailyOM):
+	def __init__(self, name, location, capacity, heatRate, fuelPrice, fuelCost, vOM, carbon, dailyOM, carbonPrice):
+		self.carbonCost = carbonPrice
 		self.name = name
 		self.location = location
 		self.usedCapacity = 0
@@ -108,36 +115,39 @@ class Plant:
 			self.totalProfit = self.profit * self.capacity - self.dailyOM / 4
 
 	def setVarCost(self):
-		self.varCost = self.fuelCost + self.vOM
+		self.varCost = self.fuelCost + self.vOM + self.carbonCost * self.carbon
 
 class Portfolio:
-	""" A model of an ESG portfolio """
-	def __init__(self, name):
-		self.name = name
-		self.plants = []
+    """ A model of an ESG portfolio """
+    def __init__(self, name):
+    	self.name = name
+    	self.plants = []
 
-	def __sort_inner(self, plant):
-		return plant.varCost
+    def __sort_inner(self, plant):
+    	return plant.varCost
 
-	def addPlant(self,plant):
-		self.plants.append(plant)
-		plant.owner = self.name
-		self.plants.sort(key=self.__sort_inner)
+    def addPlant(self,plant):
+    	self.plants.append(plant)
+    	plant.owner = self.name
+    	self.plants.sort(key=self.__sort_inner)
 
-	def calcProfit(self):
-		profit = 0
-		for plant in self.plants:
-			profit += plant.profit
-		return profit
-	def calcTotalProfit(self):
-		profit = 0
-		for plant in self.plants:
-			profit += plant.totalProfit
-		return profit
+    def calcProfit(self):
+    	profit = 0
+    	for plant in self.plants:
+    		profit += plant.profit
+    	return profit
+    def calcTotalProfit(self):
+    	profit = 0
+    	for plant in self.plants:
+    		profit += plant.totalProfit
+    	return profit
 
-	def setBids(self, clearingPrice):
-		for plant in self.plants:
-			if plant.bid < clearingPrice:
-				plant.setBid(clearingPrice)
-
+    def setBids(self, clearingPrice):
+    	for plant in self.plants:
+    		if plant.bid < clearingPrice:
+    			plant.setBid(clearingPrice)
+			
+    def resetBids(self):
+        for plant in self.plants:
+            plant.setBid(plant.varCost)
 
